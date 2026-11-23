@@ -34,27 +34,27 @@
 - [AS19] 2026-11-23 — 통합 점검 및 배포: 권한 정적 감사(팀 스코프 엔드포인트 전수),
   무효/형식 오류 토큰·미인증 401 자동화 테스트(Playwright API, 실제 로컬 백엔드 대상) 추가,
   Cloudflare Access 미적용 확인(직접 curl), 운영 서버 `WR_ALLOWED_ORIGINS`에
-  `assign.nexalab.app` 빠져 있던 것 발견·수정, Vercel 프로젝트 생성·첫 배포(아래 "AS19에서
-  한 일" 참고).
+  `assign.nexalab.app` 빠져 있던 것 발견·수정, Vercel 프로젝트 생성·배포,
+  `assign.nexalab.app` 커스텀 도메인 연결까지 전부 완료(아래 "AS19에서 한 일" 참고).
 
 ## 현재 상태
-- **2026-11-23: AS19(통합 점검·배포) 진행 중 — Vercel 배포까지 완료, 커스텀 도메인 연결과
-  운영 서버 재시작은 사용자 작업으로 남음.** assign_frontend 쪽 세션(AS12~AS19)은 이제 전부
-  작업함. 남은 건 커스텀 도메인 연결(Cloudflare DNS, 사용자 작업)과 권장 순서상 아직 안 끝난
-  AS10/AS11(wr-agent-platform 대조표·엑셀 반영) — 어느 쪽을 먼저 할지는 사용자 판단.
-- **배포됨**: `skylie249s-projects/assign_frontend` (GitHub `skylie249/assign_frontend`에
-  연동됨, push하면 자동 배포). 현재 URL: `https://assignfrontend-omega.vercel.app`
-  (프로덕션). `BACKEND_API_ORIGIN=https://weekreport-api.nexalab.app`를 Production·
-  Preview 환경변수로 등록함. **`assign.nexalab.app` 커스텀 도메인 연결은 하지 않음** —
-  Cloudflare DNS 쪽 작업(CNAME 추가)이 필요해 사용자가 직접 해야 함(F5 때 `weekreport.
-  nexalab.app`을 연결한 것과 같은 절차, `../weekreport_frontend/README.md` 참고).
-- **운영 서버(`weekreport_register`, 8879/터널) `WR_ALLOWED_ORIGINS`에 두 origin을
-  추가함(User 환경변수, Claude가 직접 수정)**: `https://assign.nexalab.app`(최종 도메인)과
-  `https://assignfrontend-omega.vercel.app`(도메인 연결 전 지금 당장 테스트할 수 있는
-  주소 — `weekreportfrontend.vercel.app`을 넣어둔 기존 관례와 같음). **서버를 재시작해야
-  반영됩니다 — 아직 재시작 전입니다.** 재시작 전까지는 이 두 origin에서도 로그인 등 쓰기
-  요청이 `forbidden_origin`으로 막힙니다(읽기 전용 GET은 영향 없음, 실제로 위 배포 URL에서
-  `/api/assign/me` GET은 정상 401 확인됨).
+- **2026-11-23: AS19(통합 점검·배포) 완료 — `assign.nexalab.app`이 실제로 서비스 중.**
+  assign_frontend 쪽 세션(AS12~AS19) 전부 완료. 남은 건 권장 순서상 아직 안 끝난
+  AS10/AS11(wr-agent-platform 대조표·엑셀 반영)뿐 — CLAUDE.md §10의 "집계" 완료 기준은
+  그게 끝나야 충족된다.
+- **배포 완료**: `skylie249s-projects/assign_frontend` (GitHub `skylie249/assign_frontend`에
+  연동, main에 push하면 자동 재배포 — 실제로 이번 세션 중 push 한 번으로 자동 재배포되는
+  것까지 확인됨). **`https://assign.nexalab.app`이 커스텀 도메인으로 연결되어 실제
+  서비스 주소다**(Vercel 별칭 `assignfrontend-omega.vercel.app`도 계속 살아 있음).
+  `BACKEND_API_ORIGIN=https://weekreport-api.nexalab.app`를 Production·Preview
+  환경변수로 등록함.
+- **운영 서버(`weekreport_register`, 8879/터널) 재시작 완료, `WR_ALLOWED_ORIGINS` 반영
+  확인됨**: `https://assign.nexalab.app`과 `https://assignfrontend-omega.vercel.app`
+  둘 다 추가(User 환경변수, Claude가 수정) 후 사용자가 재시작. 재시작 후 라이브로 전부
+  확인: 로컬(8879)·공개 터널(`weekreport-api.nexalab.app`)·배포된 Vercel URL·**실제
+  커스텀 도메인(`assign.nexalab.app`)** 네 경로 전부에서 로그인 Origin 검사 통과(가짜
+  계정으로 `wrongMid` 응답까지 도달, 더 이상 `forbidden_origin` 아님), DNS도
+  `nexalab.app` 아래 Vercel로 정상 연결된 것을 `nslookup`·`curl`로 직접 확인.
 - **`register`에 백엔드 변경 2개를 추가함(AS16·AS17 세션 중, 매번 사용자 승인 후)**:
   `GET /api/assign/periods/:id/status`(AS16)와 `GET /api/assign/c/:token` 응답에 `mname`
   추가(AS17) — 둘 다 CLAUDE.md §7이 적어둔 계약과 실제 구현이 어긋나 있던 걸 발견해 고친
@@ -448,12 +448,22 @@
   `https://assignfrontend-omega.vercel.app`로 `GET /api/assign/me` → 401 정상 확인(프록시
   → 터널 → 백엔드 왕복 end-to-end 확인). `CF_ACCESS_CLIENT_ID/SECRET`은 Access가 꺼져
   있어 등록하지 않음(.env.example 그대로 비워둠).
-- **하지 않은 것(사용자 작업 필요)**:
-  1. 운영 서버 재시작(위 WR_ALLOWED_ORIGINS 반영).
-  2. `assign.nexalab.app` 커스텀 도메인을 Cloudflare DNS에서 Vercel로 연결(F5 때
-     `weekreport.nexalab.app`에 했던 것과 같은 절차 — CNAME을 Vercel이 요구하는 값으로,
-     DNS 전용/프록시 끔). 연결 후 Vercel 프로젝트에 도메인을 추가해야 함.
-  3. 실제 팀장 계정으로 배포된 URL에 로그인해 전체 기능이 실제로 동작하는지 확인(서버
-     재시작 후에 의미 있음).
-  4. AS10/AS11(`wr-agent-platform`, 집계 대조표·엑셀 반영) — CLAUDE.md §10의 "집계" 완료
+- **배포 후속 조치(같은 날, 사용자가 서버 재시작·Cloudflare DNS 등록을 마친 뒤 Claude가
+  재확인)**:
+  - 사용자가 `git push`를 승인해 GitHub에 올림(`928eb59..70f306e`) → Vercel GitHub
+    연동으로 **자동 재배포가 실제로 트리거되는 것**까지 확인(37초 만에 새 배포 Ready).
+  - 사용자가 운영 서버를 재시작 → `WR_ALLOWED_ORIGINS` 반영을 로컬·터널·Vercel URL
+    세 경로에서 각각 Origin 헤더를 붙여 재확인(전부 `forbidden_origin` → `wrongMid`로
+    바뀜). 참고: curl은 브라우저와 달리 Origin을 자동으로 안 붙여서, 헤더 없이 테스트하면
+    (실제 브라우저에서는 안 생기는) `forbidden_origin`이 한 번 나왔었음 — 헤더를 수동으로
+    붙이자 정상 통과, 버그 아니었음.
+  - 사용자가 Cloudflare DNS에 `assign.nexalab.app`을 Vercel로 연결(F5 때
+    `weekreport.nexalab.app`에 했던 것과 같은 절차) → `nslookup`으로 Vercel DNS로
+    연결된 것, `curl`로 루트 페이지(200)·API 프록시(401)·로그인 Origin 검사(실제 도메인
+    기준 `wrongMid`)까지 전부 실제 도메인에서 확인됨.
+- **남은 것**:
+  1. 실제 팀장·팀원 계정으로 `assign.nexalab.app`에 로그인/링크 접속해 전체 기능이
+     실제 데이터로 동작하는지 확인 — Claude는 실 계정 비밀번호가 없어 계속 못함(기존
+     세션들과 같은 제약).
+  2. AS10/AS11(`wr-agent-platform`, 집계 대조표·엑셀 반영) — CLAUDE.md §10의 "집계" 완료
      기준은 아직 미충족 상태로 남아 있음(이 세션 범위 밖, 다른 폴더).
