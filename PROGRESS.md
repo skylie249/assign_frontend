@@ -11,16 +11,22 @@
 - [AS14] 2026-11-23 — 휴가 월말 일괄 입력 화면: 팀원별 섹션 + 기간·일수 행 편집, 시작일을
   고르면 종료일이 자동으로 같은 날로 채워지는 단축 입력(종일 기본값), "반차" 버튼으로 0.5일
   고정 (아래 "AS14에서 한 일" 참고).
+- [AS15] 2026-11-23 — 이슈 화면 + 워드 다운로드: 프로젝트별 상태(정상/주의/위험)·이슈·조치·
+  추적기한 등록/수정(서버가 이미 기한 초과·미해결 건을 맨 위로 정렬, 화면엔 "기한 초과" 배지만
+  추가), `docx` 라이브러리로 이번 주 이슈+이번 달 배치를 한 파일로 다운로드 (아래 "AS15에서
+  한 일" 참고).
 
 ## 현재 상태
-- **2026-11-23: AS14(휴가 월말 일괄 입력) 완료.** `register` 쪽 백엔드(AS0~AS8)·
+- **2026-11-23: AS15(이슈 화면 + 워드 다운로드) 완료.** `register` 쪽 백엔드(AS0~AS8)·
   `wr-agent-platform` 집계(AS9)는 이전에 이미 끝나 있었음(`SESSION_PLAN_ASSIGN.md` 참고).
-  다음 세션은 AS15(이슈 화면 + 워드 다운로드) — 권장 순서상 AS10/AS11(wr-agent-platform
-  대조표·엑셀 반영)이 아직 안 끝났으니 그쪽을 먼저 할지는 사용자 판단.
+  다음 세션은 AS16(확인 링크 발급·공유 + 현황 대시보드) — 권장 순서상 AS10/AS11
+  (wr-agent-platform 대조표·엑셀 반영)이 아직 안 끝났으니 그쪽을 먼저 할지는 사용자 판단.
 - 로컬 개발 서버(`npm run dev`, 5173)에서 로컬 백엔드(8879)로 `/api/assign/*` 전체(me·members·
-  projects·assignments·leaves) 프록시가 실제로 동작함을 curl로 확인함(미인증 401 일관성). **실제
-  팀장 계정으로 브라우저에 로그인해 배치표·휴가 화면이 그려지고 저장되는 것은 사용자 확인 필요** —
-  Claude는 실 계정 비밀번호가 없음(기존 세션들과 같은 제약).
+  projects·assignments·leaves·issues) 프록시가 실제로 동작함을 curl로 확인함(미인증 401
+  일관성, POST/PATCH는 Origin 헤더가 있어야 "sessionout"까지 통과하는 것도 재확인). **실제
+  팀장 계정으로 브라우저에 로그인해 배치표·휴가·이슈 화면이 그려지고 저장·워드 다운로드가
+  실제로 동작하는 것은 사용자 확인 필요** — Claude는 실 계정 비밀번호가 없음(기존 세션들과 같은
+  제약).
 
 ## AS12에서 한 일 (2026-11-23)
 - **스택**: React 18.3.1 + TypeScript + Vite 8 + react-router-dom 7 + `@tanstack/react-query` 5 +
@@ -143,3 +149,49 @@
 - **하지 않은 것**: 그룹웨어 연동은 범위 밖(CLAUDE.md §11, API 없음) — 팀장이 그룹웨어 화면을
   보고 수동으로 입력하는 걸 전제로 한다. 월을 넘기는 휴가를 양쪽 달 화면에서 각각 수정할 때의
   상호 영향(AS3에 이미 기록된 알려진 단순화)은 화면에서 별도로 경고하지 않음.
+
+## AS15에서 한 일 (2026-11-23)
+- **설치**: `docx`(9.x) — 워드 파일을 브라우저에서 바로 만들어 `Packer.toBlob`으로 다운로드.
+- **백엔드 계약 확인(코드 읽기, `AssignApiController`/`AssignService`/`assign_SQL.xml`)**:
+  `GET .../issues?week=YYYY-MM-DD` → `{issues:[{id,job_id,job_name,week_start,status,issue,
+  action,due_on,resolved_at,created_by,created_at}]}`, `POST .../issues` body
+  `{job_id,week_start,status,issue,action,due_on}`, `PATCH .../issues/{id}` body는 보낸 필드만
+  바뀌는 진짜 PATCH(`resolved:true/false`를 보내야만 `resolved_at`이 바뀜, 안 보내면 그대로
+  유지) — 화면은 항상 현재 편집 상태 전체(`status/issue/action/due_on/resolved`)를 보내 단순화함
+  (부분 필드만 보내는 최적화는 하지 않음, 이슈 하나당 필드가 적어 트래픽 문제 없음).
+  **추적 기한 지난 미해결 이슈를 맨 위로 보내는 정렬은 이미 SQL `ORDER BY`로 서버가 하고 있어서**
+  (`selectIssuesForTeamWeek`, AS7에서 구현됨) 화면은 서버가 준 순서를 그대로 쓰고, "기한 초과"
+  빨간 배지만 추가로 표시(같은 조건 `due_on < 오늘 && !resolved_at`을 클라이언트에서도 계산 —
+  서버는 `CURDATE()`(DB 서버 시간), 화면은 브라우저의 로컬 날짜를 쓰므로 자정 무렵 경계에서 둘이
+  1분 미만 어긋날 수 있음, 사내용 도구라 무시 가능한 수준으로 판단).
+- **프로젝트 선택지 소스**: 이슈는 "그 팀이 그 주차가 속한 달에 배치 중인 job_id"로만 등록
+  가능(백엔드 `requireJobAssignedToTeam`), 그런데 그 목록만 따로 주는 API가 없다(AS7에서도
+  서버 내부용으로만 계산됨). AS13에서 이미 쓰던 `GET .../assignments?month=`의 결과에서 고유
+  `job_id`/`job_name`을 뽑아 재사용(해당 주차가 속한 달로 자동 계산, `monthOfWeek`) —
+  서버가 검증에 쓰는 것과 **같은 원본 테이블(`wr_assign_assignment`)** 이라 목록이 어긋나지 않음.
+- **주차 선택**: `src/lib/week.ts`(새 파일) — 월요일 시작 주, `date-fns`의 `ko` 로케일로
+  "11/17(월) ~ 11/23(일)" 형식 표시. "수요일 본부장 보고"(CLAUDE.md §5.3)라 특정 요일 제한은
+  두지 않고 이전/다음 주 이동만 제공(어느 요일에 열어도 그 주의 이슈를 보고 고칠 수 있어야
+  해서 — 보고 전날 늦게 들어오는 경우도 흔함).
+- **화면 구조**: 이슈 카드마다 상태/이슈/조치/추적기한/해결 여부를 각자 로컬 상태로 들고 있다가
+  "저장"을 눌러야 `PATCH`(react-hook-form 대신 평범한 `useState`를 씀 — 이슈 개수가 가변이고
+  각 카드가 독립적으로 저장되는 구조라 `useFieldArray`로 전체를 하나의 폼으로 묶는 이점이 없다고
+  판단, AS13·AS14와 다른 선택). 새 이슈 등록은 react-hook-form+zod로 별도 폼.
+- **워드 다운로드**: `src/features/report/weeklyDocx.ts` — 이슈 표(프로젝트/상태/이슈/조치/
+  추적기한) + 배치 표(구성원/프로젝트/역할/투입률, AS13과 같은 월 데이터)를 한 문서에 담아
+  `{team}_{week}_주간보고.docx`로 저장. **코드 리뷰 중 발견**: `docx` 라이브러리가 번들에
+  약 225KB(gzip 67KB)를 추가해 초기 로드가 커지는 걸 빌드 경고로 확인 — "워드 다운로드" 버튼
+  클릭 시에만 `import('../../features/report/weeklyDocx')`로 지연 로드하도록 고쳐서 로그인·
+  배치표·휴가 화면(훨씬 자주 쓰는 경로)의 초기 번들에서 뺐다.
+- **검증(로컬, curl만)**: `npm run build` 성공(동적 import로 `weeklyDocx` 청크 분리 확인),
+  `GET .../issues?week=`가 401로 일관됨, `POST .../issues`가 Origin 헤더 없으면 403
+  (`OriginCheckInterceptor`가 로그인 체크보다 먼저 막음 — 로그인 플로우에서 이미 확인된 동작,
+  버그 아님), Origin을 붙이면 `{"result":"sessionout"}`(401)으로 정상적으로 더 들어감.
+  **실제 로그인 후 이슈 등록·수정·기한 초과 배지·워드 다운로드가 실제로 동작하는지는 라이브로
+  확인 못함** — 사용자 확인 필요.
+- **하지 않은 것**: "이슈(2줄 이내)" 글자수 제한은 CLAUDE.md가 정확한 글자 수를 안 줘서
+  `rows={2}` textarea로 시각적으로만 유도하고 하드 `maxLength`는 두지 않음(backend도 길이
+  제한이 없음). `due_on`을 PATCH로 지우는(값을 다시 비우는) 기능은 백엔드 `updateIssue`의
+  `<if test="due_on != null">`이 null을 보내도 무시하게 돼 있어 **애초에 안 되는 백엔드 제약**
+  — 화면에서 날짜를 지우고 저장해도 서버에 남아있던 값이 그대로 유지됨(다음에 백엔드를 고칠
+  일이 생기면 참고).

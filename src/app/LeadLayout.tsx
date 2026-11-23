@@ -12,7 +12,8 @@ export default function LeadLayout({ me, onLoggedOut }: { me: AssignMe; onLogged
 		...(me.team_code
 			? [
 					{ to: '/app/assignments', label: '배치표', end: false },
-					{ to: '/app/leaves', label: '휴가', end: false }
+					{ to: '/app/leaves', label: '휴가', end: false },
+					{ to: '/app/issues', label: '이슈', end: false }
 				]
 			: [])
 	];

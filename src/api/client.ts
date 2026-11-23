@@ -110,6 +110,45 @@ export interface SaveLeavesResult {
 	message?: string;
 }
 
+export type IssueStatus = 'normal' | 'caution' | 'risk';
+
+export interface Issue {
+	id: number;
+	job_id: string;
+	job_name: string | null;
+	week_start: string;
+	status: IssueStatus;
+	issue: string | null;
+	action: string | null;
+	due_on: string | null;
+	resolved_at: string | null;
+	created_by: string;
+	created_at: string;
+}
+
+export interface CreateIssueBody {
+	job_id: string;
+	week_start: string;
+	status: IssueStatus;
+	issue: string;
+	action: string;
+	due_on: string | null;
+}
+
+export interface UpdateIssueBody {
+	status?: IssueStatus;
+	issue?: string;
+	action?: string;
+	due_on?: string | null;
+	resolved?: boolean;
+}
+
+export interface SaveIssueResult {
+	result: 'SUCCESS' | 'invalid' | 'not_found';
+	id?: number;
+	message?: string;
+}
+
 export const api = {
 	login: (memail: string, mpassword: string) =>
 		request<LoginResult>('/api/auth/login', {
@@ -151,5 +190,18 @@ export const api = {
 		request<SaveLeavesResult>(
 			'/api/assign/teams/' + encodeURIComponent(team) + '/leaves?month=' + month,
 			{ method: 'PUT', body: JSON.stringify({ leaves: rows }) }
+		),
+
+	getIssues: (team: string, week: string) =>
+		request<{ issues: Issue[] }>('/api/assign/teams/' + encodeURIComponent(team) + '/issues?week=' + week),
+	createIssue: (team: string, body: CreateIssueBody) =>
+		request<SaveIssueResult>('/api/assign/teams/' + encodeURIComponent(team) + '/issues', {
+			method: 'POST',
+			body: JSON.stringify(body)
+		}),
+	updateIssue: (team: string, id: number, body: UpdateIssueBody) =>
+		request<SaveIssueResult>(
+			'/api/assign/teams/' + encodeURIComponent(team) + '/issues/' + id,
+			{ method: 'PATCH', body: JSON.stringify(body) }
 		)
 };
