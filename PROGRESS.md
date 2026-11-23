@@ -5,15 +5,20 @@
   `vercel.json`/`api/_proxy.js`/`api/proxy.js` 프록시 패턴(`weekreport_frontend`와 동일 구조로
   새로 작성), 로그인 게이트(`/api/assign/me` 호출 → 401이면 로그인 화면) 구현 (아래 "AS12에서 한
   일" 참고).
+- [AS13] 2026-11-23 — 배치표 화면: 팀원별 섹션 + 프로젝트/역할/투입률 행 편집, react-hook-form
+  `useFieldArray`로 실시간 1인 합계 100% 검증, "지난달과 동일"(덮어쓰기 확인 포함) 버튼 (아래
+  "AS13에서 한 일" 참고).
 
 ## 현재 상태
-- **2026-11-23: AS12(골격) 완료.** `register` 쪽 백엔드(AS0~AS8)·`wr-agent-platform` 집계(AS9)는
-  이전에 이미 끝나 있었음(`SESSION_PLAN_ASSIGN.md` 참고). 다음 세션은 AS13(배치표 화면) —
-  단, 권장 순서상 AS10/AS11(wr-agent-platform 대조표·엑셀 반영)이 아직 안 끝났으니 그쪽을 먼저
-  할지는 사용자 판단.
-- 로컬 개발 서버(`npm run dev`, 5173)에서 로컬 백엔드(8879)로 `/api` 프록시가 실제로 동작함을
-  curl로 확인함(아래 참고). **실제 브라우저로 로그인해 `/api/assign/me` 응답이 화면에 표시되는지는
-  사용자 확인 필요** — Claude는 실 계정 비밀번호가 없음(기존 세션들과 같은 제약).
+- **2026-11-23: AS13(배치표 화면) 완료.** `register` 쪽 백엔드(AS0~AS8)·`wr-agent-platform`
+  집계(AS9)는 이전에 이미 끝나 있었음(`SESSION_PLAN_ASSIGN.md` 참고). 다음 세션은 AS14(휴가
+  월말 일괄 입력) — 권장 순서상 AS10/AS11(wr-agent-platform 대조표·엑셀 반영)이 아직 안 끝났으니
+  그쪽을 먼저 할지는 사용자 판단.
+- 로컬 개발 서버(`npm run dev`, 5173)에서 로컬 백엔드(8879)로 `/api/assign/*` 전체(me·members·
+  projects·assignments) 프록시가 실제로 동작함을 curl로 확인함(미인증 401 일관성). **실제
+  팀장 계정으로 브라우저에 로그인해 배치표 화면이 그려지고 저장되는 것은 사용자 확인 필요** —
+  Claude는 실 계정 비밀번호가 없음(기존 세션들과 같은 제약, 이번 세션은 브라우저 자동화도
+  사용자가 보류시켜 시도하지 않았음).
 
 ## AS12에서 한 일 (2026-11-23)
 - **스택**: React 18.3.1 + TypeScript + Vite 8 + react-router-dom 7 + `@tanstack/react-query` 5 +
@@ -60,3 +65,47 @@
 - **하지 않은 것**: react-hook-form·zod·date-fns·docx·Vitest·Playwright는 아직 설치하지
   않음(CLAUDE.md §9가 선언한 전체 스택이지만, 이번 세션 범위(골격+로그인)에 당장 쓸 데가 없어서
   — AS13(배치표, RHF+zod)·AS15(워드, docx)·AS17(Playwright)에서 실제로 쓸 때 추가).
+
+## AS13에서 한 일 (2026-11-23)
+- **설치**: `react-hook-form`, `zod`(v4), `@hookform/resolvers`(v7, zod v4 지원), `date-fns`.
+- **백엔드 계약 확인(코드 읽기, `AssignApiController`/`AssignService`/`assign_SQL.xml`)**:
+  `GET/PUT .../assignments?month=`의 각 배치 행은 `{memail, job_id, role_name, ratio}`
+  (PUT 바디는 `{assignments:[...]}`), 팀 멤버는 `{memail, mname, mposition, mposName, work_type,
+  standard_hours, joined_on, left_on}`, 프로젝트는 `{job_id, job_name, job_order, category}`.
+  저장은 한 사람 ratio 합이 100이 아니어도 막지 않고 `warnings:[{memail,total_ratio}]`만 돌려줌
+  (CLAUDE.md §5.1 그대로) — `AssignService.computeRatioWarnings`와 **같은 공식**(오차 0.01)을
+  화면에도 그대로 구현해 서버·화면의 "100%" 판정이 어긋나지 않게 함.
+  `copy-previous`는 대상 월에 데이터가 있으면 `overwrite=true` 없이 `needs_confirm`만 반환.
+- **클라이언트(`src/api/client.ts`) 확장**: `getTeamMembers`/`getProjects`/`getAssignments`/
+  `saveAssignments`/`copyPreviousAssignments` 추가. **버그를 세션 중 발견·수정**: 기존 `request()`
+  헬퍼가 `!res.ok`면 무조건 generic Error를 던져서, 배치표 저장이 "팀 구성원이 아닙니다" 같은
+  사유로 400을 돌려줄 때 그 메시지가 그대로 버려지고 있었다 — 응답 `content-type`이
+  `application/json`이면 상태코드와 무관하게 파싱해서 호출자가 `result`/`message`를 보고
+  분기하도록 수정(로그인 등 기존 2xx 전용 호출에는 영향 없음).
+- **화면 설계**: 팀장이 1인당 여러 프로젝트에 각각 다른 역할·비율로 배치될 수 있어(CLAUDE.md
+  §5.1) **고정된 "N명×M프로젝트" 테이블 그리드가 아니라, 팀원별 섹션 + 그 사람의 배치 행 목록**
+  (프로젝트 선택 + 역할 입력 + 비율 입력 + 삭제, 섹션 하단에 "+ 줄 추가")으로 구현. 10명×5프로젝트
+  완료 기준은 "10명 각자가 평균 ~0.5개 프로젝트에 배치된" 현재 테스트 데이터보다 많은 행을 다룰
+  수 있는 구조로 충족(멤버 수·행 수에 상한 없음, 실제 수치로는 아직 라이브 검증 못함 — 아래 참고).
+- **실시간 100% 검증**: `useFieldArray`(RHF) + `useWatch`로 모든 행 값을 구독, `memail`별로 묶어
+  합계를 `useMemo`로 계산 → 섹션 헤더에 "합계 N%" 배지(녹색/빨강)로 즉시 표시. 저장 버튼은 막지
+  않음(경고만, CLAUDE.md §5.1 그대로) — 서버 응답의 `warnings`도 저장 후 메시지로 보여줌.
+- **"지난달과 동일"**: `overwrite=false`로 먼저 호출 → `needs_confirm`이면 인라인 확인 배너
+  ("기존 배치 N건이 있습니다. 덮어쓸까요?")를 보여주고, 사용자가 누르면 `overwrite=true`로 재호출.
+  `no_source`(지난달 배치 없음)·`SUCCESS`(복사 건수) 메시지도 구분해서 표시.
+- **라우팅/레이아웃**: `LeadLayout`(새 파일, 상단 네비게이션 "대시보드"/"배치표" + 로그아웃)을
+  추가하고 `DashboardPage`에서 로그아웃 버튼을 레이아웃으로 옮김. `/app` 인덱스 = 대시보드,
+  `/app/assignments` = 배치표(팀 코드가 없는 계정은 네비게이션에 "배치표" 링크 자체를 숨김).
+- **검증(로컬, curl만 — 아래 "사용자 확인 필요" 참고)**:
+  ① `npm run build` 성공(타입 체크 포함),
+  ② `npm run dev`로 로컬 백엔드 프록시 — `GET .../members`·`GET .../projects?team=`·
+  `GET .../assignments?month=` 전부 미인증 상태에서 401로 일관됨(직접 8879를 두드린 것과 동일).
+  **실제 로그인 후 배치표 그리드가 그려지고, 비율 변경 시 합계 배지가 실시간으로 바뀌고, 저장·
+  "지난달과 동일"이 실제로 동작하는지는 라이브로 확인 못함** — 사용자가 이번 세션 중 브라우저
+  자동화(claude-in-chrome)로 직접 확인하는 것도 보류시켜서, AS2 당시 썼던 테스트 데이터
+  (`D26-BA1002`, 2026-11/12월, ratio 100%)가 여전히 맞는 화면을 그리는지 포함해 다음에 브라우저로
+  확인 필요.
+- **알아둘 제약(기록, 다음에 영향)**: 프로젝트 선택은 평범한 `<select>`이고 활성 프로젝트가
+  89건(AS1 조사 기준)이라 검색 없이 스크롤해서 찾아야 한다 — 쓰다 보니 불편하면 이후 세션에서
+  검색 가능한 콤보박스로 바꿀 것. 역할(`role_name`)은 자유 텍스트 50자 제한만 두고 선택 목록을
+  만들지 않음(계획에 선택 목록 요구 없음).

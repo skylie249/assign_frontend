@@ -17,7 +17,10 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 	if (res.status === 401) {
 		throw new SessionOutError();
 	}
-	if (!res.ok) {
+	// 400(예: 배치표 저장 "invalid")도 JSON 바디(result/message)를 그대로 돌려주므로 파싱한다 —
+	// 진짜 예외(5xx, 네트워크 오류 등 JSON이 아닌 응답)만 throw한다.
+	const contentType = res.headers.get('content-type') ?? '';
+	if (!res.ok && !contentType.includes('application/json')) {
 		throw new Error('HTTP ' + res.status + ' ' + (await res.text().catch(() => '')));
 	}
 	return res.json();
@@ -35,6 +38,57 @@ export interface LoginResult {
 	member?: { memail: string; mname: string };
 }
 
+export interface TeamMember {
+	memail: string;
+	mname: string;
+	mposition: string;
+	mposName: string;
+	work_type: 'resident' | 'non_resident';
+	standard_hours: number;
+	joined_on: string | null;
+	left_on: string | null;
+}
+
+export interface Project {
+	job_id: string;
+	job_name: string;
+	job_order: number;
+	category: 'B1' | 'B2' | 'B3' | 'U' | 'E' | null;
+}
+
+export interface AssignmentRow {
+	id?: number;
+	memail: string;
+	mname?: string;
+	job_id: string;
+	job_name?: string;
+	role_name: string | null;
+	ratio: number;
+}
+
+export interface RatioWarning {
+	memail: string;
+	total_ratio: number;
+}
+
+export interface AssignmentsResponse {
+	team_code: string;
+	month: string;
+	assignments: AssignmentRow[];
+	warnings: RatioWarning[];
+}
+
+export interface SaveAssignmentsResult {
+	result: 'SUCCESS' | 'invalid';
+	warnings?: RatioWarning[];
+	message?: string;
+}
+
+export type CopyPreviousResult =
+	| { result: 'needs_confirm'; existing_count: number }
+	| { result: 'no_source'; message: string }
+	| { result: 'SUCCESS'; copied_count: number; warnings: RatioWarning[] };
+
 export const api = {
 	login: (memail: string, mpassword: string) =>
 		request<LoginResult>('/api/auth/login', {
@@ -42,5 +96,31 @@ export const api = {
 			body: JSON.stringify({ memail, mpassword })
 		}),
 	logout: () => request<{ result: string }>('/api/auth/logout', { method: 'POST' }),
-	getMe: () => request<AssignMe>('/api/assign/me')
+	getMe: () => request<AssignMe>('/api/assign/me'),
+
+	getTeamMembers: (team: string) =>
+		request<{ team_code: string; members: TeamMember[] }>(
+			'/api/assign/teams/' + encodeURIComponent(team) + '/members'
+		),
+	getProjects: (team: string) =>
+		request<{ projects: Project[] }>('/api/assign/projects?team=' + encodeURIComponent(team)),
+	getAssignments: (team: string, month: string) =>
+		request<AssignmentsResponse>(
+			'/api/assign/teams/' + encodeURIComponent(team) + '/assignments?month=' + month
+		),
+	saveAssignments: (team: string, month: string, rows: Omit<AssignmentRow, 'id' | 'mname' | 'job_name'>[]) =>
+		request<SaveAssignmentsResult>(
+			'/api/assign/teams/' + encodeURIComponent(team) + '/assignments?month=' + month,
+			{ method: 'PUT', body: JSON.stringify({ assignments: rows }) }
+		),
+	copyPreviousAssignments: (team: string, month: string, overwrite: boolean) =>
+		request<CopyPreviousResult>(
+			'/api/assign/teams/' +
+				encodeURIComponent(team) +
+				'/assignments/copy-previous?month=' +
+				month +
+				'&overwrite=' +
+				overwrite,
+			{ method: 'POST' }
+		)
 };

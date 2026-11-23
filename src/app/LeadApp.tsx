@@ -1,7 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Route, Routes } from 'react-router-dom';
 import { api, SessionOutError } from '../api/client';
 import LoginPage from '../pages/lead/LoginPage';
 import DashboardPage from '../pages/lead/DashboardPage';
+import AssignmentsPage from '../pages/lead/AssignmentsPage';
+import LeadLayout from './LeadLayout';
 
 // 로그인 게이트. weekreport.nexalab.app과 쿠키 도메인이 달라 세션을 공유하지 않으므로,
 // 여기서 한 번 더 로그인한다(기존 /api/auth/login 재사용, 새 비밀번호 체계 없음).
@@ -29,5 +32,16 @@ export default function LeadApp() {
 		return <div className="min-h-screen bg-slate-50" />;
 	}
 
-	return <DashboardPage me={meQuery.data} onLoggedOut={refetchMe} />;
+	const me = meQuery.data;
+
+	return (
+		<Routes>
+			<Route element={<LeadLayout me={me} onLoggedOut={refetchMe} />}>
+				<Route index element={<DashboardPage me={me} />} />
+				{me.team_code && (
+					<Route path="assignments" element={<AssignmentsPage team={me.team_code} />} />
+				)}
+			</Route>
+		</Routes>
+	);
 }

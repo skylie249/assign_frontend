@@ -9,10 +9,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hookform/resolvers": "^7.0.8",
     "@tanstack/react-query": "^5.108.3",
+    "date-fns": "^4.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^7.18.6"
+    "react-hook-form": "^7.92.0",
+    "react-router-dom": "^7.18.6",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.5",
