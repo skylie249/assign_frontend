@@ -27,12 +27,16 @@
   코어+자기 코드(gzip 수 KB)만으로 줄임. Playwright E2E(375×812, API 스텁) 3개 추가. 이
   과정에서 `register`의 확인 카드 응답에 "이름"(mname)이 빠져 있던 걸 발견해 사용자 확인 후
   추가함(아래 "AS17에서 한 일" 참고).
+- [AS18] 2026-11-23 — 월말 확인(상주 팀장) 화면: "지난달 배치(또는 이번 달에 이미 있으면
+  그걸) + 이번 달 승인 휴가" 초안을 보여주고 [확인] 한 번으로 복사+월말 확정. `deputy` 대리
+  감사 로그는 **백엔드가 이미 ctx.getMemail() 기준으로 남기고 있어 추가 작업 없이 그대로
+  충족됨**(아래 "AS18에서 한 일" 참고) — AS16·AS17과 달리 이번엔 `register`를 건드리지 않음.
 
 ## 현재 상태
-- **2026-11-23: AS17(팀원 모바일 확인 화면) 완료 — assign_frontend 쪽 세션(AS12~AS18) 중
-  남은 건 AS18(월말 확인+deputy 대리) 하나.** `wr-agent-platform` 집계(AS9)는 이전에 이미
-  끝나 있었음. 다음 세션은 AS18, 또는 권장 순서상 아직 안 끝난 AS10/AS11(wr-agent-platform
-  대조표·엑셀 반영)을 먼저 할지는 사용자 판단.
+- **2026-11-23: AS18(월말 확인) 완료 — assign_frontend 쪽 세션(AS12~AS18) 전부 완료.**
+  `wr-agent-platform` 집계(AS9)는 이전에 이미 끝나 있었음. 남은 건 AS19(통합 점검·배포)와,
+  권장 순서상 아직 안 끝난 AS10/AS11(wr-agent-platform 대조표·엑셀 반영) — 어느 쪽을 먼저
+  할지는 사용자 판단.
 - **`register`에 백엔드 변경 2개를 추가함(AS16·AS17 세션 중, 매번 사용자 승인 후)**:
   `GET /api/assign/periods/:id/status`(AS16)와 `GET /api/assign/c/:token` 응답에 `mname`
   추가(AS17) — 둘 다 CLAUDE.md §7이 적어둔 계약과 실제 구현이 어긋나 있던 걸 발견해 고친
@@ -344,3 +348,43 @@
   상태 자체가 없음 — CLAUDE.md도 "기간 밖에는 안내만 보여 준다"고만 하고 그 이상을 요구하지
   않음). 느린 3G 등 실제 네트워크 스로틀링 조건에서 "2초 이내"를 직접 측정하지는 않음(번들
   크기로 간접 확인).
+
+## AS18에서 한 일 (2026-11-23)
+- **"월말 확인"을 기존 API 조합으로 해석(계획이 정확한 메커니즘을 정의하지 않아 이번
+  세션에서 확정)**: CLAUDE.md §5.5는 "지난달 배치 + 이번 달 승인 휴가 초안을 보여주고
+  [확인] 한 번으로 확정한다"고만 적고 있어, 실제로 [확인]이 뭘 호출해야 하는지는 코드를
+  보고 역으로 설계함. `AssignService.closeMonth`(AS7)는 `wr_assign_month_close`에
+  upsert만 하고 그 값을 읽는 API도 없고 다른 어디서도 참조되지 않는 "그냥 기록용 도장"이라,
+  [확인]을 다음 두 기존 API의 조합으로 구현함: ①이번 달 배치가 비어 있으면
+  `copy-previous`(AS13, overwrite=false)로 지난달 배치를 복사, 이미 있으면 건너뜀(수동으로
+  이미 편집해둔 걸 덮어쓰지 않음) ②`month-close` 호출로 확정 기록. 둘 다 기존 세션(AS7·
+  AS13)이 만든 API 그대로 재사용 — **이번 세션은 `register`를 전혀 건드리지 않음**(AS16·
+  AS17과 다른 점).
+- **deputy 대리 감사 로그는 이미 충족돼 있었음(코드 읽기로 확인, 새로 만들 필요 없었음)**:
+  `AssignAuthContext.hasTeamScope`가 `team_lead`/`deputy`를 구분하지 않고 똑같이 취급하고
+  (`role != null && teamCode 일치`), `AssignApiController.closeMonth`가 매번
+  `auditLogService.log(ctx.getMemail(), "MONTH_CLOSE", ...)`로 **실제로 누른 사람**(대리면
+  deputy의 memail)을 남긴다 — `wr_assign_role`에 team_code=X, role=deputy로 등록된 계정이
+  이 화면에서 [확인]을 누르면 자동으로 그 계정 이름이 감사 로그에 남는다. 화면·클라이언트
+  코드에서 "대리인가 아닌가"를 따로 구분하거나 표시하지 않음(백엔드가 이미 역할 구분 없이
+  동일하게 처리하므로 화면도 똑같이 두는 게 맞다고 판단).
+- **화면**: `MonthClosePage`(새 파일) — 월 이동(이전/다음), "지난달 배치"(이번 달이 비어
+  있을 때) 또는 "이번 달 배치"(이미 있을 때, 라벨이 바뀜) 읽기 전용 목록, "이번 달 승인
+  휴가" 읽기 전용 목록(AS14의 `useLeaves` 재사용), [확인] 버튼 하나. 확인 후
+  "확정되었습니다" 메시지로 바뀌고 버튼이 사라짐(연타 방지 — 다만 서버 쪽은 upsert라 여러
+  번 눌러도 안전, 화면 쪽 가드는 UX용).
+- **클라이언트**: `client.ts`에 `closeMonth(team, month)` 추가(`POST .../month-close?month=`,
+  응답은 항상 `{result:"SUCCESS"}`뿐). `features/assignment/hooks.ts`에 `useCloseMonth(team)`
+  추가 — 기존 `useCopyPreviousAssignments`와 같은 파일에 둠(월말 확인이 배치표 기능의
+  연장이라 새 `features/monthClose` 폴더를 만들 필요가 없다고 판단).
+- **검증(로컬, curl만)**: `npm run build` 성공, `POST .../month-close?month=`가 Origin
+  헤더 포함 시 401(`sessionout`)로 다른 쓰기 API들과 일관됨. `npm run e2e`(AS17의 팀원 확인
+  테스트 3개, 이번 세션 변경과 무관하지만 회귀 확인용으로 재실행) 전부 통과. **실제 팀장·
+  deputy 계정으로 로그인해 복사+확정이 실제로 동작하고, deputy로 눌렀을 때
+  `wr_audit_log.actor`가 deputy 메일로 남는 것은 라이브로 확인 못함** — 사용자 확인 필요.
+- **하지 않은 것**: "이미 이번 달을 확정했는지" 표시는 넣지 않음(위에서 설명한 대로 읽는
+  API가 없어서 — 필요해지면 `register`에 `GET .../month-close?month=` 같은 조회 API를
+  추가하고 화면에 "이미 확정됨" 배지를 붙이는 게 다음 개선 방향). 데스크톱 전용 넓은 레이아웃
+  최적화는 하지 않음(다른 페이지처럼 `max-w-sm`로 모바일 우선 폭만 사용 — CLAUDE.md §5.5가
+  "월말 확인은 모바일 우선"이라고 명시했으므로 데스크톱에서도 좁게 보이는 걸 의도된 동작으로
+  둠).

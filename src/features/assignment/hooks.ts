@@ -44,3 +44,9 @@ export function useCopyPreviousAssignments(team: string, month: string) {
 		}
 	});
 }
+
+export function useCloseMonth(team: string) {
+	return useMutation({
+		mutationFn: (month: string) => api.closeMonth(team, month)
+	});
+}

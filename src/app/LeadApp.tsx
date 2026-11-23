@@ -8,6 +8,7 @@ import AssignmentsPage from '../pages/lead/AssignmentsPage';
 import LeavesPage from '../pages/lead/LeavesPage';
 import IssuesPage from '../pages/lead/IssuesPage';
 import LinksPage from '../pages/lead/LinksPage';
+import MonthClosePage from '../pages/lead/MonthClosePage';
 import LeadLayout from './LeadLayout';
 
 // TanStack Query는 팀장·관리자 화면에서만 쓴다 — 여기서 Provider를 두면 이 모듈이 지연
@@ -60,6 +61,7 @@ function LeadAppInner() {
 						<Route path="leaves" element={<LeavesPage team={me.team_code} />} />
 						<Route path="issues" element={<IssuesPage team={me.team_code} />} />
 						<Route path="links" element={<LinksPage team={me.team_code} />} />
+						<Route path="month-close" element={<MonthClosePage team={me.team_code} />} />
 					</>
 				)}
 			</Route>

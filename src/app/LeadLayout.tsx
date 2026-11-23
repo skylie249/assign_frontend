@@ -14,7 +14,8 @@ export default function LeadLayout({ me, onLoggedOut }: { me: AssignMe; onLogged
 					{ to: '/app/assignments', label: '배치표', end: false },
 					{ to: '/app/leaves', label: '휴가', end: false },
 					{ to: '/app/issues', label: '이슈', end: false },
-					{ to: '/app/links', label: '확인 링크', end: false }
+					{ to: '/app/links', label: '확인 링크', end: false },
+					{ to: '/app/month-close', label: '월말 확인', end: false }
 				]
 			: [])
 	];

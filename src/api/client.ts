@@ -89,6 +89,10 @@ export type CopyPreviousResult =
 	| { result: 'no_source'; message: string }
 	| { result: 'SUCCESS'; copied_count: number; warnings: RatioWarning[] };
 
+export interface MonthCloseResult {
+	result: 'SUCCESS';
+}
+
 export interface LeaveRow {
 	id?: number;
 	memail: string;
@@ -288,6 +292,11 @@ export const api = {
 				month +
 				'&overwrite=' +
 				overwrite,
+			{ method: 'POST' }
+		),
+	closeMonth: (team: string, month: string) =>
+		request<MonthCloseResult>(
+			'/api/assign/teams/' + encodeURIComponent(team) + '/month-close?month=' + month,
 			{ method: 'POST' }
 		),
 
