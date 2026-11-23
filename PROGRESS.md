@@ -31,12 +31,30 @@
   그걸) + 이번 달 승인 휴가" 초안을 보여주고 [확인] 한 번으로 복사+월말 확정. `deputy` 대리
   감사 로그는 **백엔드가 이미 ctx.getMemail() 기준으로 남기고 있어 추가 작업 없이 그대로
   충족됨**(아래 "AS18에서 한 일" 참고) — AS16·AS17과 달리 이번엔 `register`를 건드리지 않음.
+- [AS19] 2026-11-23 — 통합 점검 및 배포: 권한 정적 감사(팀 스코프 엔드포인트 전수),
+  무효/형식 오류 토큰·미인증 401 자동화 테스트(Playwright API, 실제 로컬 백엔드 대상) 추가,
+  Cloudflare Access 미적용 확인(직접 curl), 운영 서버 `WR_ALLOWED_ORIGINS`에
+  `assign.nexalab.app` 빠져 있던 것 발견·수정, Vercel 프로젝트 생성·첫 배포(아래 "AS19에서
+  한 일" 참고).
 
 ## 현재 상태
-- **2026-11-23: AS18(월말 확인) 완료 — assign_frontend 쪽 세션(AS12~AS18) 전부 완료.**
-  `wr-agent-platform` 집계(AS9)는 이전에 이미 끝나 있었음. 남은 건 AS19(통합 점검·배포)와,
-  권장 순서상 아직 안 끝난 AS10/AS11(wr-agent-platform 대조표·엑셀 반영) — 어느 쪽을 먼저
-  할지는 사용자 판단.
+- **2026-11-23: AS19(통합 점검·배포) 진행 중 — Vercel 배포까지 완료, 커스텀 도메인 연결과
+  운영 서버 재시작은 사용자 작업으로 남음.** assign_frontend 쪽 세션(AS12~AS19)은 이제 전부
+  작업함. 남은 건 커스텀 도메인 연결(Cloudflare DNS, 사용자 작업)과 권장 순서상 아직 안 끝난
+  AS10/AS11(wr-agent-platform 대조표·엑셀 반영) — 어느 쪽을 먼저 할지는 사용자 판단.
+- **배포됨**: `skylie249s-projects/assign_frontend` (GitHub `skylie249/assign_frontend`에
+  연동됨, push하면 자동 배포). 현재 URL: `https://assignfrontend-omega.vercel.app`
+  (프로덕션). `BACKEND_API_ORIGIN=https://weekreport-api.nexalab.app`를 Production·
+  Preview 환경변수로 등록함. **`assign.nexalab.app` 커스텀 도메인 연결은 하지 않음** —
+  Cloudflare DNS 쪽 작업(CNAME 추가)이 필요해 사용자가 직접 해야 함(F5 때 `weekreport.
+  nexalab.app`을 연결한 것과 같은 절차, `../weekreport_frontend/README.md` 참고).
+- **운영 서버(`weekreport_register`, 8879/터널) `WR_ALLOWED_ORIGINS`에 두 origin을
+  추가함(User 환경변수, Claude가 직접 수정)**: `https://assign.nexalab.app`(최종 도메인)과
+  `https://assignfrontend-omega.vercel.app`(도메인 연결 전 지금 당장 테스트할 수 있는
+  주소 — `weekreportfrontend.vercel.app`을 넣어둔 기존 관례와 같음). **서버를 재시작해야
+  반영됩니다 — 아직 재시작 전입니다.** 재시작 전까지는 이 두 origin에서도 로그인 등 쓰기
+  요청이 `forbidden_origin`으로 막힙니다(읽기 전용 GET은 영향 없음, 실제로 위 배포 URL에서
+  `/api/assign/me` GET은 정상 401 확인됨).
 - **`register`에 백엔드 변경 2개를 추가함(AS16·AS17 세션 중, 매번 사용자 승인 후)**:
   `GET /api/assign/periods/:id/status`(AS16)와 `GET /api/assign/c/:token` 응답에 `mname`
   추가(AS17) — 둘 다 CLAUDE.md §7이 적어둔 계약과 실제 구현이 어긋나 있던 걸 발견해 고친
@@ -388,3 +406,54 @@
   최적화는 하지 않음(다른 페이지처럼 `max-w-sm`로 모바일 우선 폭만 사용 — CLAUDE.md §5.5가
   "월말 확인은 모바일 우선"이라고 명시했으므로 데스크톱에서도 좁게 보이는 걸 의도된 동작으로
   둠).
+
+## AS19에서 한 일 (2026-11-23)
+- **권한 정적 감사**: `AssignApiController`의 `@GetMapping`/`@PostMapping`/`@PutMapping`/
+  `@PatchMapping` 전부(`/me` 제외 — 본인 정보 조회라 팀 스코프가 의미 없음)를 grep으로
+  나열해, 예외 없이 `hasTeamScope(...)` 또는 `isAdmin()`을 거치는 것을 확인함(18개 엔드포인트
+  전수 확인, `confirmations/:id/review`는 `AssignService.reviewConfirmation` 안에서
+  `SecurityException`으로 던지고 컨트롤러가 받는 방식이라 겉보기엔 다르지만 같은 보장).
+  라이브로 "다른 팀 403"은 AS1에서, "무효/재발급 토큰 404 일치"는 AS4·AS5에서 이미 사용자가
+  직접 확인했던 것 — 이번 세션은 그게 **모든 쓰기·조회 경로에 빠짐없이 적용돼 있는지**를
+  코드로 재확인한 것.
+- **자동화 테스트 추가(`e2e/permissions.spec.ts`, 새 파일)**: 자격증명 없이 확인 가능한
+  부분만 Playwright API 테스트(`request` 컨텍스트, 브라우저 없이 순수 HTTP)로 자동화함 —
+  실제 로컬 백엔드(8879)를 대상으로 함(모킹 아님):
+  - 팀 스코프 엔드포인트 6개에 세션 없이 접근 → 전부 401 `{"result":"sessionout"}`.
+  - `/c/:token`에 형식이 다른 무효 토큰 4종(존재하지 않는 토큰, 올바르지 않은 문자, 한
+    글자, 공백 포함) → GET·POST 둘 다 전부 404 `{"result":"unavailable",...}`, 게다가
+    **응답 바디가 모든 경우에 완전히 동일함**을 `Set` 크기로 확인(CLAUDE.md §7 "존재 여부를
+    흘리지 않음"을 직접 검증).
+  - **"다른 팀 접근 차단"은 자동화하지 않음** — 실제 로그인 세션(팀장 계정)이 있어야 의미
+    있게 테스트할 수 있어서다. 위 정적 감사 + AS1의 라이브 기록으로 대체.
+  - `npm run e2e` 총 18개(기존 AS17의 3개 + 신규 15개) 전부 통과.
+- **Cloudflare Access 상태 확인(읽기 전용)**: `https://weekreport-api.nexalab.app/api/
+  assign/me`를 직접 GET해보니 Access 로그인 페이지가 아니라 백엔드의 정상 JSON이 그대로
+  나옴 → **Access는 켜져 있지 않다**(CLAUDE.md §0-3 예상대로, 이번 세션에서 확정). 그래서
+  `/api/assign/c/*` 예외 규칙 설정은 지금은 할 게 없음(Access를 나중에 켤 때 다시 확인 필요).
+- **배포 전 차단 요소 발견·수정**: 운영 Java 서버가 실제로 참조하는 `WR_ALLOWED_ORIGINS`는
+  하드코딩 폴백이 아니라 **Windows User 환경변수로 설정돼 있었고**(`weekreport.nexalab.app`,
+  `weekreportfrontend.vercel.app`, localhost 두 개만 — AS0가 걱정했던 바로 그 상황,
+  "환경변수로 직접 설정해 운영한다면 그쪽에도 추가 필요"), `assign.nexalab.app`이 빠져 있어
+  **지금 이대로 배포하면 로그인을 포함한 모든 쓰기 요청이 막힐 상태**였다. 사용자 확인 후
+  PowerShell `[Environment]::SetEnvironmentVariable(...,"User")`로
+  `https://assign.nexalab.app`과 `https://assignfrontend-omega.vercel.app`(아래 배포
+  URL) 두 개를 추가함. **서버 프로세스는 아직 재시작 전이라 반영 안 됨 — 사용자가 재시작
+  필요**(재시작 전까지 로그인 등 상태 변경 요청은 이 두 origin에서도 `forbidden_origin`).
+- **Vercel 배포**: `vercel link --yes`로 프로젝트 생성(`skylie249s-projects/assign_frontend`,
+  GitHub `skylie249/assign_frontend` 자동 연동 — 앞으로 push하면 자동 배포됨), `vercel env
+  add BACKEND_API_ORIGIN`으로 Production·Preview 환경변수 등록(`https://weekreport-api.
+  nexalab.app`, `weekreport_frontend`와 같은 터널), `vercel --yes`로 첫 배포. 첫 배포라
+  Vercel이 자동으로 Production 대상으로 처리함(CLI 안내 문구 그대로). 안정된 별칭
+  `https://assignfrontend-omega.vercel.app`로 `GET /api/assign/me` → 401 정상 확인(프록시
+  → 터널 → 백엔드 왕복 end-to-end 확인). `CF_ACCESS_CLIENT_ID/SECRET`은 Access가 꺼져
+  있어 등록하지 않음(.env.example 그대로 비워둠).
+- **하지 않은 것(사용자 작업 필요)**:
+  1. 운영 서버 재시작(위 WR_ALLOWED_ORIGINS 반영).
+  2. `assign.nexalab.app` 커스텀 도메인을 Cloudflare DNS에서 Vercel로 연결(F5 때
+     `weekreport.nexalab.app`에 했던 것과 같은 절차 — CNAME을 Vercel이 요구하는 값으로,
+     DNS 전용/프록시 끔). 연결 후 Vercel 프로젝트에 도메인을 추가해야 함.
+  3. 실제 팀장 계정으로 배포된 URL에 로그인해 전체 기능이 실제로 동작하는지 확인(서버
+     재시작 후에 의미 있음).
+  4. AS10/AS11(`wr-agent-platform`, 집계 대조표·엑셀 반영) — CLAUDE.md §10의 "집계" 완료
+     기준은 아직 미충족 상태로 남아 있음(이 세션 범위 밖, 다른 폴더).
