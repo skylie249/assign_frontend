@@ -9,7 +9,12 @@ export default function LeadLayout({ me, onLoggedOut }: { me: AssignMe; onLogged
 
 	const navItems = [
 		{ to: '/app', label: '대시보드', end: true },
-		...(me.team_code ? [{ to: '/app/assignments', label: '배치표', end: false }] : [])
+		...(me.team_code
+			? [
+					{ to: '/app/assignments', label: '배치표', end: false },
+					{ to: '/app/leaves', label: '휴가', end: false }
+				]
+			: [])
 	];
 
 	return (

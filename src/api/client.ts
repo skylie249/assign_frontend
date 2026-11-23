@@ -89,6 +89,27 @@ export type CopyPreviousResult =
 	| { result: 'no_source'; message: string }
 	| { result: 'SUCCESS'; copied_count: number; warnings: RatioWarning[] };
 
+export interface LeaveRow {
+	id?: number;
+	memail: string;
+	mname?: string;
+	starts_on: string;
+	ends_on: string;
+	days: number;
+	source?: 'groupware_approved' | 'member_reported';
+}
+
+export interface LeavesResponse {
+	team_code: string;
+	month: string;
+	leaves: LeaveRow[];
+}
+
+export interface SaveLeavesResult {
+	result: 'SUCCESS' | 'invalid';
+	message?: string;
+}
+
 export const api = {
 	login: (memail: string, mpassword: string) =>
 		request<LoginResult>('/api/auth/login', {
@@ -122,5 +143,13 @@ export const api = {
 				'&overwrite=' +
 				overwrite,
 			{ method: 'POST' }
+		),
+
+	getLeaves: (team: string, month: string) =>
+		request<LeavesResponse>('/api/assign/teams/' + encodeURIComponent(team) + '/leaves?month=' + month),
+	saveLeaves: (team: string, month: string, rows: Omit<LeaveRow, 'id' | 'mname'>[]) =>
+		request<SaveLeavesResult>(
+			'/api/assign/teams/' + encodeURIComponent(team) + '/leaves?month=' + month,
+			{ method: 'PUT', body: JSON.stringify({ leaves: rows }) }
 		)
 };

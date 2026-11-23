@@ -4,6 +4,7 @@ import { api, SessionOutError } from '../api/client';
 import LoginPage from '../pages/lead/LoginPage';
 import DashboardPage from '../pages/lead/DashboardPage';
 import AssignmentsPage from '../pages/lead/AssignmentsPage';
+import LeavesPage from '../pages/lead/LeavesPage';
 import LeadLayout from './LeadLayout';
 
 // 로그인 게이트. weekreport.nexalab.app과 쿠키 도메인이 달라 세션을 공유하지 않으므로,
@@ -39,7 +40,10 @@ export default function LeadApp() {
 			<Route element={<LeadLayout me={me} onLoggedOut={refetchMe} />}>
 				<Route index element={<DashboardPage me={me} />} />
 				{me.team_code && (
-					<Route path="assignments" element={<AssignmentsPage team={me.team_code} />} />
+					<>
+						<Route path="assignments" element={<AssignmentsPage team={me.team_code} />} />
+						<Route path="leaves" element={<LeavesPage team={me.team_code} />} />
+					</>
 				)}
 			</Route>
 		</Routes>
