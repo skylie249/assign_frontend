@@ -20,23 +20,34 @@
   Web Share API/복사로 공유, 발급·확인·변경·간주·미응답·검토대기 현황과 "달라짐" 응답
   반영/무시. 이 과정에서 `register`에 빠져 있던 `GET /api/assign/periods/:id/status`를
   사용자 확인 후 추가함(아래 "AS16에서 한 일" 참고).
+- [AS17] 2026-11-23 — 팀원 모바일 확인 화면(`/c/:token`, 로그인 없음): 375×812에서 스크롤
+  없이 "배정대로 진행" 탭 한 번 제출, "배정이 달라요"(휴가·부재/추가 업무/비율 변경/기타 +
+  특이사항 100자), 재방문 시 제출 내용+수정 버튼. 번들을 팀장 화면(`LeadApp`)과 완전히
+  분리해(React.lazy) 팀원 쪽 초기 로드를 TanStack Query·react-hook-form·zod·docx 없이 React
+  코어+자기 코드(gzip 수 KB)만으로 줄임. Playwright E2E(375×812, API 스텁) 3개 추가. 이
+  과정에서 `register`의 확인 카드 응답에 "이름"(mname)이 빠져 있던 걸 발견해 사용자 확인 후
+  추가함(아래 "AS17에서 한 일" 참고).
 
 ## 현재 상태
-- **2026-11-23: AS16(확인 링크·현황 대시보드) 완료.** `wr-agent-platform` 집계(AS9)는
-  이전에 이미 끝나 있었음. 다음 세션은 AS17(팀원 모바일 확인 화면, `/c/:token`) — 권장 순서상
-  AS10/AS11(wr-agent-platform 대조표·엑셀 반영)이 아직 안 끝났으니 그쪽을 먼저 할지는 사용자
-  판단.
-- **`register`에 백엔드 API 1개를 추가함(이 세션 중, 사용자 승인 후)**: `GET /api/assign/
-  periods/:id/status`가 CLAUDE.md §7엔 적혀 있지만 AS4~AS7 어디서도 실제로 구현되지 않았던
-  걸 발견. `weekreport_register`의 DAO/Service/Controller/매퍼에 작게 추가하고 사용자가
-  직접 서버를 재시작해 반영을 확인함(아래 "AS16에서 한 일" 참고). **`weekreport_register`
-  쪽 `PROGRESS.md`는 이번 세션에서 갱신하지 않음 — 그 저장소 기록은 별도로 처리.**
+- **2026-11-23: AS17(팀원 모바일 확인 화면) 완료 — assign_frontend 쪽 세션(AS12~AS18) 중
+  남은 건 AS18(월말 확인+deputy 대리) 하나.** `wr-agent-platform` 집계(AS9)는 이전에 이미
+  끝나 있었음. 다음 세션은 AS18, 또는 권장 순서상 아직 안 끝난 AS10/AS11(wr-agent-platform
+  대조표·엑셀 반영)을 먼저 할지는 사용자 판단.
+- **`register`에 백엔드 변경 2개를 추가함(AS16·AS17 세션 중, 매번 사용자 승인 후)**:
+  `GET /api/assign/periods/:id/status`(AS16)와 `GET /api/assign/c/:token` 응답에 `mname`
+  추가(AS17) — 둘 다 CLAUDE.md §7이 적어둔 계약과 실제 구현이 어긋나 있던 걸 발견해 고친
+  것. `weekreport_register`의 DAO/Service/Controller/매퍼에 작게 추가하고 매번 사용자가
+  직접 서버를 재시작해 반영을 확인함(아래 "AS16에서 한 일"·"AS17에서 한 일" 참고).
+  **`weekreport_register` 쪽 `PROGRESS.md`는 이 저장소 세션들에서 갱신하지 않음 — 그
+  저장소 기록은 별도로 처리.**
 - 로컬 개발 서버(`npm run dev`, 5173)에서 로컬 백엔드(8879)로 `/api/assign/*` 전체(me·members·
   projects·assignments·leaves·issues·periods·tokens·periods/:id/status·confirmations/:id/
-  review) 프록시가 실제로 동작함을 curl로 확인함(미인증 401 일관성, POST/PATCH는 Origin
-  헤더가 있어야 "sessionout"까지 통과하는 것도 재확인). **실제 팀장 계정으로 브라우저에 로그인해
-  배치표·휴가·이슈·확인 링크 화면이 그려지고 저장·워드 다운로드·링크 발급·공유가 실제로
-  동작하는 것은 사용자 확인 필요** — Claude는 실 계정 비밀번호가 없음(기존 세션들과 같은 제약).
+  review·c/:token GET·POST) 프록시가 실제로 동작함을 curl로 확인함(미인증/무효 토큰 401·404
+  일관성, POST/PATCH는 Origin 헤더가 있어야 "sessionout"까지 통과하는 것도 재확인).
+  Playwright E2E(API 스텁, 375×812)로 팀원 확인 화면의 핵심 흐름(제출·재방문·무효 링크)은
+  검증됨. **실제 팀장·팀원 계정으로 브라우저에 로그인/링크 접속해 전체 화면이 실제 데이터로
+  그려지고 저장·워드 다운로드·링크 발급·공유·확인 제출이 동작하는 것은 사용자 확인 필요** —
+  Claude는 실 계정 비밀번호가 없음(기존 세션들과 같은 제약).
 
 ## AS12에서 한 일 (2026-11-23)
 - **스택**: React 18.3.1 + TypeScript + Vite 8 + react-router-dom 7 + `@tanstack/react-query` 5 +
@@ -272,3 +283,64 @@
   목록에서 골라 누르다 "상주 인력은 대상이 아닙니다" 에러를 보는 것보다 처음부터 안 보이는
   쪽이 낫다고 판단함. 확인 기간의 `opens_at`/`closes_at`을 화면에서 직접 지정하는 입력은 넣지
   않음(기본값만 사용 — 필요해지면 다음에 추가).
+
+## AS17에서 한 일 (2026-11-23)
+- **백엔드 공백 발견 → 사용자 확인 후 `register`에 한 줄 추가**: `AssignConfirmApiController`/
+  `AssignService.getConfirmCard`를 읽어보니 CLAUDE.md §7이 "GET .../c/:token → **이름**,
+  기간, 배정 카드, 기존 응답, 응답 가능 여부"라고 적어뒀는데 실제 응답엔 `memail`만 있고
+  `mname`이 없었다(AS5 구현 당시 빠뜸, 발견: 이 화면에 뭐라고 인사말을 띄울지 보다가 알아챔).
+  사용자 승인 후 `AssignService`에 `memberDao`(기존 `MemberDao`, 다른 컨트롤러가 이미 쓰던
+  것 재사용)를 주입해 `getConfirmCard`가 `memberDao.selectMember(memail).getMname()`을
+  `mname`으로 응답에 추가하도록 고침. **AS16과 같은 절차**(컴파일만 먼저 확인 → 사용자에게
+  보고·승인 받기 → 사용자가 직접 서버 재시작 → curl로 엔드포인트가 여전히 정상 응답하는 것만
+  재확인, 실제 토큰으로 `mname`이 들어오는지는 Claude가 가진 토큰이 없어 라이브 미확인).
+- **"달라짐" 선택지 설계(계획엔 "선택지만"이라고만 적혀 있어 이번 세션에서 구체화)**:
+  CLAUDE.md §3-3 절대 원칙("자유 입력은 특이사항 한 줄(100자)뿐")을 지키려고, 네 선택지 중
+  "추가 업무"에서도 프로젝트를 자유 텍스트로 입력받지 않았다. 대신:
+  - 휴가·부재 → `{type:"leave", days}` — AS7 `applyChanges`의 `leave` 타입과 정확히
+    일치해서 팀장이 "반영"을 누르면 자동으로 `wr_assign_leave`에 들어간다.
+  - 비율 변경 → `{type:"ratio_change", job_id, new_ratio}` — 본인의 **현재 배정 목록에서
+    고른 프로젝트**만 대상으로 함(토큰 기반 공개 API엔 전체 프로젝트 카탈로그를 조회하는
+    길이 없어서 — `GET /api/assign/projects`는 로그인 세션이 있어야 함). AS7의
+    `ratio_change`와 정확히 일치해 자동 반영됨.
+  - 추가 업무 → `{type:"new_project", ratio}` — "어느 프로젝트"는 구조화된 입력 없이 비율만
+    받는다. AS7의 `applyChanges`가 모르는 타입이라 **자동 반영되지 않고 조용히 건너뜀**(의도된
+    동작, 코드 주석에 이미 그렇게 적혀 있었음) — 어떤 프로젝트인지는 팀장이 특이사항 메모를
+    읽거나 본인에게 직접 물어 AS13 배치표 화면에서 수동으로 추가해야 함. 이 한계를 팀장이
+    AS16 현황 대시보드에서 바로 알 수 있도록 특이사항을 그대로 보여주게 해뒀다(AS16에서 이미
+    구현됨).
+  - 기타 → `{type:"other"}` — 구조화된 필드 없음, 특이사항 메모가 전부.
+  - 특이사항(선택, 100자)은 선택지와 별개로 항상 입력 가능.
+- **번들 분리(완료 기준 "느린 회선 2초 이내")**: 기존엔 `App.tsx`가 `QueryClientProvider`를
+  최상단에서 감싸고 `LeadApp`·`ConfirmPage`를 둘 다 바로 import하고 있어서, 팀원이 링크 하나
+  열 때도 TanStack Query·react-hook-form·zod·date-fns(AS13~AS16이 쓰는 전체 스택)가 전부
+  내려받아지고 있었다. `QueryClientProvider`를 `LeadApp.tsx` 안으로 옮기고, `App.tsx`에서
+  `LeadApp`·`ConfirmPage` 둘 다 `React.lazy`로 분리 — 빌드 결과 `ConfirmPage` 청크가
+  **6.6KB(gzip 2KB)**, 공용 `client.ts` 청크가 2.3KB(gzip 0.8KB)로 떨어짐(React 코어 자체인
+  `index` 청크 182KB/gzip 60KB는 어쩔 수 없는 바닥값). `LeadApp` 청크(242KB/gzip 69KB)와
+  `weeklyDocx` 청크(225KB/gzip 67KB, AS15에서 이미 분리)는 팀원 쪽에서 전혀 안 받는다.
+- **375px·44px 터치 영역**: 기존 페이지들과 같은 Tailwind 유틸(`h-11`/`h-12` = 44px/48px)을
+  그대로 씀. 배정 카드가 보통 1~2줄이라 375×812에서 "배정대로 진행" 버튼까지 스크롤 없이
+  보임(Playwright로 버튼의 bounding box가 뷰포트 안에 있는지 확인).
+- **재방문("수정") 단순화**: `existing_confirmation`엔 이전에 고른 "달라짐" 선택지의
+  `changes_json`이 돌아오지 않는다(AS5가 `status`/`note`/`submitted_at`만 돌려줌,
+  `changes_json`을 추가하는 건 이번 세션 범위로 보지 않음 — 팀장 쪽 현황 대시보드와 달리
+  이 화면은 본인이 이미 아는 내용이라 다시 보여줄 필요가 크지 않다고 판단). "수정" 버튼은
+  이전 선택을 복원하지 않고 처음부터 다시 작성하게 한다 — 1분 안에 다시 끝날 만큼 선택지가
+  단순해서 문제되지 않는다고 봄.
+- **Playwright E2E(새로 설치)**: `@playwright/test` + Chromium만 설치(Playwright의 iPhone X
+  프리셋은 기본이 webkit인데 이 머신엔 chromium만 있어 `defaultBrowserType: 'chromium'`으로
+  덮어씀, 뷰포트·터치 에뮬레이션은 그대로 유지). `e2e/confirm.spec.ts` 3개 — 백엔드 없이
+  `page.route`로 GET/POST를 스텁(제출 후 같은 테스트 안에서 GET이 "이미 제출됨" 응답으로
+  자연스럽게 바뀌도록 클로저 변수로 상태를 들고 있음): ①첫 방문 — 스크롤 없이 버튼 노출 +
+  탭 한 번 제출, ②재방문 — 기존 상태 + 수정 버튼, ③무효 토큰 — 동일 안내 메시지. 전부 통과.
+- **검증(로컬, curl + Playwright)**: `npm run build` 성공(위 번들 분리 확인), 가짜 토큰으로
+  GET/POST 둘 다 `{"result":"unavailable",...}` 404로 일관됨(Origin 헤더 없이도 통과 —
+  `/api/assign/c/**`는 AS5에서 이미 Origin 검사 제외됨). `npm run e2e` 3개 전부 통과.
+  **실제 발급된 토큰으로 브라우저에서 열어 이름·배정 카드가 실제 데이터로 뜨는 것은 라이브로
+  확인 못함** — 사용자 확인 필요.
+- **하지 않은 것**: 응답 기간 밖·마감 임박 안내 문구는 따로 만들지 않음(백엔드가 기간 밖이면
+  무조건 `unavailable`로 묶어서, "기간이 다가온다"/"얼마 안 남았다" 같은 안내를 보여줄 수 있는
+  상태 자체가 없음 — CLAUDE.md도 "기간 밖에는 안내만 보여 준다"고만 하고 그 이상을 요구하지
+  않음). 느린 3G 등 실제 네트워크 스로틀링 조건에서 "2초 이내"를 직접 측정하지는 않음(번들
+  크기로 간접 확인).

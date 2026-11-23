@@ -215,6 +215,47 @@ export interface ReviewConfirmationResult {
 	message?: string;
 }
 
+export interface ConfirmAssignmentRow {
+	job_id: string;
+	job_name: string | null;
+	role_name: string | null;
+	ratio: number;
+}
+
+export interface ExistingConfirmation {
+	status: ConfirmationStatus;
+	note: string | null;
+	submitted_at: string | null;
+}
+
+export interface ConfirmCard {
+	memail: string;
+	mname: string;
+	period_start: string;
+	period_end: string;
+	assignments: ConfirmAssignmentRow[];
+	existing_confirmation: ExistingConfirmation | null;
+}
+
+export type ConfirmCardResult = ConfirmCard | { result: 'unavailable' | 'rate_limited'; message?: string };
+
+export type ChangeItem =
+	| { type: 'leave'; days: number }
+	| { type: 'new_project'; ratio: number }
+	| { type: 'ratio_change'; job_id: string; new_ratio: number }
+	| { type: 'other' };
+
+export interface SubmitConfirmationBody {
+	status: 'confirmed' | 'changed';
+	changes?: ChangeItem[];
+	note?: string;
+}
+
+export interface SubmitConfirmationResult {
+	result: 'SUCCESS' | 'invalid' | 'unavailable' | 'rate_limited';
+	message?: string;
+}
+
 export const api = {
 	login: (memail: string, mpassword: string) =>
 		request<LoginResult>('/api/auth/login', {
@@ -289,5 +330,13 @@ export const api = {
 		request<ReviewConfirmationResult>('/api/assign/confirmations/' + confirmationId + '/review', {
 			method: 'POST',
 			body: JSON.stringify({ action })
+		}),
+
+	getConfirmCard: (token: string) =>
+		request<ConfirmCardResult>('/api/assign/c/' + encodeURIComponent(token)),
+	submitConfirmation: (token: string, body: SubmitConfirmationBody) =>
+		request<SubmitConfirmationResult>('/api/assign/c/' + encodeURIComponent(token), {
+			method: 'POST',
+			body: JSON.stringify(body)
 		})
 };
