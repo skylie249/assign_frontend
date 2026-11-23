@@ -15,18 +15,28 @@
   추적기한 등록/수정(서버가 이미 기한 초과·미해결 건을 맨 위로 정렬, 화면엔 "기한 초과" 배지만
   추가), `docx` 라이브러리로 이번 주 이슈+이번 달 배치를 한 파일로 다운로드 (아래 "AS15에서
   한 일" 참고).
+- [AS16] 2026-11-23 — 확인 링크 발급·공유 + 현황 대시보드: 확인 기간 생성(브라우저
+  localStorage에 최근 기간 기록 — 조회 API가 없어서), 비상주·겸직 인력에게 토큰 일괄 발급 후
+  Web Share API/복사로 공유, 발급·확인·변경·간주·미응답·검토대기 현황과 "달라짐" 응답
+  반영/무시. 이 과정에서 `register`에 빠져 있던 `GET /api/assign/periods/:id/status`를
+  사용자 확인 후 추가함(아래 "AS16에서 한 일" 참고).
 
 ## 현재 상태
-- **2026-11-23: AS15(이슈 화면 + 워드 다운로드) 완료.** `register` 쪽 백엔드(AS0~AS8)·
-  `wr-agent-platform` 집계(AS9)는 이전에 이미 끝나 있었음(`SESSION_PLAN_ASSIGN.md` 참고).
-  다음 세션은 AS16(확인 링크 발급·공유 + 현황 대시보드) — 권장 순서상 AS10/AS11
-  (wr-agent-platform 대조표·엑셀 반영)이 아직 안 끝났으니 그쪽을 먼저 할지는 사용자 판단.
+- **2026-11-23: AS16(확인 링크·현황 대시보드) 완료.** `wr-agent-platform` 집계(AS9)는
+  이전에 이미 끝나 있었음. 다음 세션은 AS17(팀원 모바일 확인 화면, `/c/:token`) — 권장 순서상
+  AS10/AS11(wr-agent-platform 대조표·엑셀 반영)이 아직 안 끝났으니 그쪽을 먼저 할지는 사용자
+  판단.
+- **`register`에 백엔드 API 1개를 추가함(이 세션 중, 사용자 승인 후)**: `GET /api/assign/
+  periods/:id/status`가 CLAUDE.md §7엔 적혀 있지만 AS4~AS7 어디서도 실제로 구현되지 않았던
+  걸 발견. `weekreport_register`의 DAO/Service/Controller/매퍼에 작게 추가하고 사용자가
+  직접 서버를 재시작해 반영을 확인함(아래 "AS16에서 한 일" 참고). **`weekreport_register`
+  쪽 `PROGRESS.md`는 이번 세션에서 갱신하지 않음 — 그 저장소 기록은 별도로 처리.**
 - 로컬 개발 서버(`npm run dev`, 5173)에서 로컬 백엔드(8879)로 `/api/assign/*` 전체(me·members·
-  projects·assignments·leaves·issues) 프록시가 실제로 동작함을 curl로 확인함(미인증 401
-  일관성, POST/PATCH는 Origin 헤더가 있어야 "sessionout"까지 통과하는 것도 재확인). **실제
-  팀장 계정으로 브라우저에 로그인해 배치표·휴가·이슈 화면이 그려지고 저장·워드 다운로드가
-  실제로 동작하는 것은 사용자 확인 필요** — Claude는 실 계정 비밀번호가 없음(기존 세션들과 같은
-  제약).
+  projects·assignments·leaves·issues·periods·tokens·periods/:id/status·confirmations/:id/
+  review) 프록시가 실제로 동작함을 curl로 확인함(미인증 401 일관성, POST/PATCH는 Origin
+  헤더가 있어야 "sessionout"까지 통과하는 것도 재확인). **실제 팀장 계정으로 브라우저에 로그인해
+  배치표·휴가·이슈·확인 링크 화면이 그려지고 저장·워드 다운로드·링크 발급·공유가 실제로
+  동작하는 것은 사용자 확인 필요** — Claude는 실 계정 비밀번호가 없음(기존 세션들과 같은 제약).
 
 ## AS12에서 한 일 (2026-11-23)
 - **스택**: React 18.3.1 + TypeScript + Vite 8 + react-router-dom 7 + `@tanstack/react-query` 5 +
@@ -195,3 +205,70 @@
   `<if test="due_on != null">`이 null을 보내도 무시하게 돼 있어 **애초에 안 되는 백엔드 제약**
   — 화면에서 날짜를 지우고 저장해도 서버에 남아있던 값이 그대로 유지됨(다음에 백엔드를 고칠
   일이 생기면 참고).
+
+## AS16에서 한 일 (2026-11-23)
+- **백엔드 공백 발견 → 사용자 확인 후 `register`에 추가(이 세션에서 두 폴더를 같이 건드림,
+  사용자 승인)**: CLAUDE.md §7과 `SESSION_PLAN_ASSIGN.md`의 AS16 선행 조건(AS4·AS6·AS7)을
+  보고 "현황 API는 이미 있겠다"고 가정했다가, 실제로 `AssignDao`/`AssignService`/
+  `AssignApiController`를 읽어보니 **기간 전체의 토큰·확인 목록을 조회하는 메서드 자체가
+  없었다**(개인별 조회(`selectConfirmationByPeriodMember`)와 단건 조회(`selectConfirmationById`)
+  뿐). 사용자에게 보고하고 승인받아 `weekreport_register`에 작게 추가함:
+  - `assign_SQL.xml`: `selectPeriodStatusMembers`(그 기간에 토큰을 받은 적 있는 사람 전체 —
+    재발급으로 토큰이 여러 개여도 `GROUP BY`+`MAX(T.id)`로 최신 토큰 하나만 — 와 그 사람의
+    확인 응답을 LEFT JOIN. `wr_assign_confirmation`이 `(period_id, memail)` UNIQUE라 조인해도
+    행이 늘지 않음).
+  - `AssignDao`: `selectPeriodStatusMembers(long periodId)` 추가.
+  - `AssignService`: `getPeriodStatus(Map period, long periodId)` 추가 — `reissueToken`과
+    같은 패턴으로 period를 컨트롤러가 이미 조회·스코프 검사한 걸 그대로 받는다(중복 조회 안 함).
+    "검토 대기"는 `status='changed'`인데 `reviewed_by IS NULL`인 것만 센다(confirmed/
+    auto_assumed는 검토가 필요 없음, CLAUDE.md §5.4).
+  - `AssignApiController`: `GET /api/assign/periods/{id}/status` 추가(404/403은 기존
+    `reissueToken`과 같은 순서로 체크).
+  - **빌드만 하고 재시작은 하지 않음** — 서버 재시작(프로세스 종료)은 하드-투-리버스 액션이라
+    사용자에게 먼저 물었고, 중간에 `token_id`(재발급용) 필드가 빠진 걸 코드 리뷰로 한 번 더
+    발견해 추가한 뒤 **사용자가 직접 서버를 재시작**해 실제로 반영됨을 확인함(`curl`로 새
+    엔드포인트가 401/sessionout을 정상 반환하는 것까지 재확인).
+  - **`weekreport_register/PROGRESS.md`는 건드리지 않음** — 그 저장소의 기록은 별도로 처리됨.
+    이 변경 내용은 이 문서(AS16)에만 남아 있으니, 다음에 `register` 쪽 세션을 열면 이 절을
+    참고해서 그쪽 `PROGRESS.md`에도 옮겨 적을 것.
+- **클라이언트 계약**: `GET /api/assign/periods/:id/status` → `{period, summary:{issued,
+  confirmed,changed,auto_assumed,no_response,pending_review}, members:[{memail,mname,
+  token_id,confirmation_id,status,submitted_at,note,changes_json,needs_review}]}`.
+  `POST /api/assign/teams/:team/periods`(성공 시 `result` 키가 없는 `Period` 객체를 그대로
+  반환, 실패 시 `{result:"invalid",message}` — 응답 모양이 둘이라 프론트에서 `'id' in result`로
+  구분), `POST /api/assign/periods/:id/tokens` → `{results:[{memail,token?,expires_at?,
+  error?}]}`, `POST /api/assign/tokens/:id/reissue` → `{token,expires_at}`(래핑 없이 그대로),
+  `POST /api/assign/confirmations/:id/review` → `{result,action,applied_count}`.
+- **확인 기간 목록을 못 가져오는 문제(또 다른 공백, 이번엔 백엔드를 더 건드리지 않고 프론트에서
+  흡수)**: 기간을 "생성"하는 API는 있어도 "팀의 기존 기간 목록을 조회"하는 API는 없다(이것까지
+  추가하면 범위가 더 커져서 이번엔 요청하지 않음). `src/lib/recentPeriods.ts`(새 파일)로
+  팀별 최근 만든 기간 10개를 브라우저 `localStorage`에 기록해 화면에서 다시 선택할 수 있게 함 —
+  서버 데이터가 아니라 **이 브라우저에서 만든 기록만** 보인다는 한계가 있음(다른 기기·다른
+  브라우저에서는 안 보임, 사용자에게 알려줄 만한 트레이드오프).
+- **링크 공유**: `src/lib/share.ts`(새 파일) — `navigator.share`가 있으면 먼저 쓰고(메신저·
+  문자 앱 선택지), 없거나 실패하면 클립보드 복사로 자동 폴백. 사용자가 공유 시트에서 취소한
+  경우(`AbortError`)는 복사로 떨어지지 않고 조용히 끝남(취소를 실패로 취급하지 않음). 완료
+  기준("공유 실패 시 복사 폴백")을 자동 폴백으로 충족시키면서, 별도 "복사" 버튼도 항상 같이
+  둬서 수동으로도 바로 복사할 수 있게 함.
+- **평문 토큰은 발급·재발급 "그 순간" 응답에만 있다**: DB에는 SHA-256 해시만 저장되므로(AS4),
+  현황 대시보드는 누가 발급받았는지·어떤 상태인지는 보여줄 수 있어도 그 사람의 **링크 자체는
+  다시 보여줄 수 없다** — 화면엔 발급·재발급 직후에만 "공유/복사" 카드가 뜨고, 새로고침하거나
+  나중에 다시 들어오면 사라진다(의도된 동작, CLAUDE.md §5.6의 "평문은 저장하지 않는다"를
+  그대로 따름). 이미 발급된 사람에게 다시 보내야 하면 "재발급"(이전 링크는 즉시 무효화)만
+  가능.
+- **"달라짐" 검토(반영/무시)**: SESSION_PLAN_ASSIGN.md의 AS16 설명엔 명시돼 있지 않았지만,
+  CLAUDE.md §5.4가 "검토 대기"를 현황 대시보드의 일부로 요구하고 있어서, 보여주기만 하고 액션이
+  없으면 막다른 화면이 된다고 판단해 `POST /api/assign/confirmations/:id/review`(AS7에서 이미
+  구현됨)를 이 화면에 같이 연결함. `changes_json`은 아직 모양이 안 굳어진 상태라(AS5·AS7
+  기록 참고) 그대로 pretty-print한 JSON을 보여주고 팀장이 읽고 반영/무시를 누르게 함 — 별도
+  파싱·요약 UI는 만들지 않음.
+- **검증(로컬, curl만)**: `npm run build` 성공, 새 라우트 5개(`periods` POST, `periods/:id/
+  status` GET, `periods/:id/tokens` POST, `tokens/:id/reissue` POST, `confirmations/:id/
+  review` POST) 전부 프록시를 통해 401로 일관됨(Origin 헤더 포함 시 `sessionout`까지 확인).
+  **실제 로그인 후 기간 생성 → 링크 발급 → 공유/복사 → 현황 조회 → 반영/무시 전체 흐름이
+  실제로 동작하는지는 라이브로 확인 못함** — 사용자 확인 필요.
+- **하지 않은 것**: 상주 인력에게 발급을 "시도"하는 UI 자체를 막음(체크박스 목록에 `work_type
+  !== 'non_resident'`인 사람을 처음부터 안 보여줌) — 백엔드가 이미 막아주지만(AS4), 팀장이
+  목록에서 골라 누르다 "상주 인력은 대상이 아닙니다" 에러를 보는 것보다 처음부터 안 보이는
+  쪽이 낫다고 판단함. 확인 기간의 `opens_at`/`closes_at`을 화면에서 직접 지정하는 입력은 넣지
+  않음(기본값만 사용 — 필요해지면 다음에 추가).

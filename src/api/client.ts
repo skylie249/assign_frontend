@@ -149,6 +149,72 @@ export interface SaveIssueResult {
 	message?: string;
 }
 
+export interface Period {
+	id: number;
+	team_code: string;
+	period_start: string;
+	period_end: string;
+	opens_at: string;
+	closes_at: string;
+}
+
+export interface CreatePeriodBody {
+	period_start: string;
+	period_end: string;
+	opens_at?: string;
+	closes_at?: string;
+}
+
+export type CreatePeriodResult = Period | { result: 'invalid'; message: string };
+
+export interface IssueTokenResult {
+	memail: string;
+	token?: string;
+	expires_at?: string;
+	error?: string;
+}
+
+export interface ReissueTokenResult {
+	token: string;
+	expires_at: string;
+}
+
+export type ConfirmationStatus = 'confirmed' | 'changed' | 'auto_assumed';
+
+export interface PeriodStatusMember {
+	memail: string;
+	mname: string;
+	token_id: number;
+	confirmation_id: number | null;
+	status: ConfirmationStatus | null;
+	submitted_at: string | null;
+	note: string | null;
+	changes_json: string | null;
+	needs_review: boolean;
+}
+
+export interface PeriodStatusSummary {
+	issued: number;
+	confirmed: number;
+	changed: number;
+	auto_assumed: number;
+	no_response: number;
+	pending_review: number;
+}
+
+export interface PeriodStatusResponse {
+	period: Period;
+	summary: PeriodStatusSummary;
+	members: PeriodStatusMember[];
+}
+
+export interface ReviewConfirmationResult {
+	result: 'SUCCESS' | 'not_found' | 'invalid' | 'forbidden';
+	action?: 'apply' | 'ignore';
+	applied_count?: number;
+	message?: string;
+}
+
 export const api = {
 	login: (memail: string, mpassword: string) =>
 		request<LoginResult>('/api/auth/login', {
@@ -203,5 +269,25 @@ export const api = {
 		request<SaveIssueResult>(
 			'/api/assign/teams/' + encodeURIComponent(team) + '/issues/' + id,
 			{ method: 'PATCH', body: JSON.stringify(body) }
-		)
+		),
+
+	createPeriod: (team: string, body: CreatePeriodBody) =>
+		request<CreatePeriodResult>('/api/assign/teams/' + encodeURIComponent(team) + '/periods', {
+			method: 'POST',
+			body: JSON.stringify(body)
+		}),
+	issueTokens: (periodId: number, memails: string[]) =>
+		request<{ results: IssueTokenResult[] }>('/api/assign/periods/' + periodId + '/tokens', {
+			method: 'POST',
+			body: JSON.stringify({ memails })
+		}),
+	reissueToken: (tokenId: number) =>
+		request<ReissueTokenResult>('/api/assign/tokens/' + tokenId + '/reissue', { method: 'POST' }),
+	getPeriodStatus: (periodId: number) =>
+		request<PeriodStatusResponse>('/api/assign/periods/' + periodId + '/status'),
+	reviewConfirmation: (confirmationId: number, action: 'apply' | 'ignore') =>
+		request<ReviewConfirmationResult>('/api/assign/confirmations/' + confirmationId + '/review', {
+			method: 'POST',
+			body: JSON.stringify({ action })
+		})
 };

@@ -20,3 +20,7 @@ export function weekLabel(weekStart: string): string {
 export function monthOfWeek(weekStart: string): string {
 	return format(parseISO(weekStart), 'yyyy-MM');
 }
+
+export function weekEnd(weekStart: string): string {
+	return format(addDays(parseISO(weekStart), 6), 'yyyy-MM-dd');
+}
